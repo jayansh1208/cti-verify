@@ -21,6 +21,9 @@ function App(){
   const [bson, setBson] = useState(null);
   const [toast, setToast] = useState('');
   const [mobile, setMobile] = useState(false);
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [classifyForm, setClassifyForm] = useState({ title: '', description: '', tags: '' });
+  const [classifyResult, setClassifyResult] = useState(null);
 
   async function api(path, options){ const r = await fetch(API + path, options); if(!r.ok) throw new Error((await r.json()).error || 'Request failed'); return r.json(); }
   async function load(){ try { setStats(await api('/stats')); const t=await api('/threats?limit=50'); setThreats(t.items); setSources(await api('/sources')); } catch(e){ setToast('Backend not connected. Start the Node server and MongoDB.'); } }
@@ -31,7 +34,18 @@ function App(){
   const nav=[['dashboard','Overview',LayoutDashboard],['threats','Threat Intelligence',ShieldAlert],['sources','Sources',Radio],['reports','Reports',FileText],['schema','Schema Lab',Database],['cache','Working Set',Activity]];
 
   const openThreat = async (id)=>{ try { setSelected(await api(`/threats/${id}`)); } catch(e){ setToast(e.message); } };
-  const classify = async ()=>{ const title=prompt('Threat title or description to classify:'); if(!title)return; const r=await api('/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title})}); setToast(`${r.label} • ${r.severity.toUpperCase()} • ${r.score}/100`); };
+  const classify = ()=>{ setClassifyResult(null); setClassifyOpen(true); };
+  const submitClassification = async (event)=>{
+    event.preventDefault();
+    const payload = {
+      title: classifyForm.title,
+      description: classifyForm.description,
+      tags: classifyForm.tags
+    };
+    const r = await api('/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    setClassifyResult(r);
+    setToast(`${r.label} • ${r.severity.toUpperCase()} • ${r.score}/100`);
+  };
 
   return <div className="app">
     <aside className={`sidebar ${mobile?'show':''}`}>
@@ -53,6 +67,13 @@ function App(){
       </section>
     </main>
     {selected && <ThreatModal item={selected} close={()=>setSelected(null)}/>} 
+    {classifyOpen && <ClassifyModal
+      form={classifyForm}
+      result={classifyResult}
+      onFieldChange={(field, value)=>setClassifyForm((prev)=>({ ...prev, [field]: value }))}
+      onClose={()=>{ setClassifyOpen(false); setClassifyResult(null); setClassifyForm({ title: '', description: '', tags: '' }); }}
+      onSubmit={submitClassification}
+    />}
   </div>
 }
 
@@ -68,8 +89,34 @@ function Threats({threats,query,setQuery,openThreat}){return <><PageHead title="
 function PageHead({title,sub}){return <div className="pagehead"><div><h1>{title}</h1><p>{sub}</p></div></div>}
 function Sources({sources}){return <><PageHead title="Intelligence Sources" sub="Referenced source documents keep repeated publisher data out of threat records."/><div className="source-grid">{sources.map(s=><div className="source-card" key={s._id}><div className="source-icon"><Radio size={18}/></div><div><b>{s.name}</b><p>{s.url}</p></div><Badge tone={s.status==='active'?'green':'yellow'}>{s.status}</Badge><div className="source-meta"><span>{s.articleCount} reports</span><span>Checked {ago(s.lastChecked)}</span></div></div>)}</div></>}
 function Reports(){const [items,setItems]=useState([]); useEffect(()=>{fetch(API+'/reports').then(r=>r.json()).then(setItems).catch(()=>{})},[]); return <><PageHead title="Threat Reports" sub="Reports discovered from open security-intelligence feeds."/><div className="panel reportlist">{items.map(r=><div className="report" key={r._id}><div><Badge>{r.category}</Badge><h3>{r.title}</h3><p>{r.summary}</p><small>{r.sourceName} · {ago(r.publishedAt)}</small></div><a href={r.url} target="_blank" rel="noreferrer"><ExternalLink size={17}/></a></div>)}</div></>}
-function SchemaLab({bson}){return <><PageHead title="Schema Lab" sub="Lab 7.1 — embedding, referencing and BSON-size analysis."/><div className="grid-2"><div className="panel"><div className="panel-head"><div><h2>Production design</h2><p>Reference stable sources; embed threat-specific data.</p></div></div><div className="schema"><div className="schema-box primary"><b>Threat</b><span>title · severity · category</span><span>indicators[] — embedded</span><span>classification — embedded</span><span>sourceIds[] — references</span></div><div className="connector">references →</div><div className="schema-box"><b>Source</b><span>name</span><span>url</span><span>status</span><span>articleCount</span></div></div><div className="callout"><Database size={18}/><div><b>Why reference sources?</b><p>A source can publish many reports. Embedding the same publisher object in every threat duplicates data and makes publisher updates expensive.</p></div></div></div><div className="panel"><div className="panel-head"><div><h2>Lab 7.1 BSON check</h2><p>MongoDB document limit: 16 MB</p></div></div>{bson?<div className="bson"><div><span>Average</span><b>{Math.round(bson.averageBytes/1024*100)/100} KB</b></div><div><span>Maximum</span><b>{Math.round(bson.maxBytes/1024*100)/100} KB</b></div><div><span>Limit usage</span><b>{bson.percentOfLimit.toFixed(4)}%</b></div><div className="meter"><i style={{width:`${Math.min(100,bson.percentOfLimit)}%`}}/></div><Badge tone="green">No document approaches 16 MB</Badge></div>:<div className="empty">Loading BSON metrics…</div>}</div></div><div className="panel activity"><h2>Activity redesign: embed the source</h2><p>If you decide that the source itself is part of the actual threat record, embed a small source snapshot inside each threat.</p><pre>{`source: {\n  name: "Check Point Research",\n  url: "https://research.checkpoint.com/",\n  confidence: 92\n}`}</pre><div className="pros"><div><b>Faster</b><span>Threat + source is one read.</span></div><div><b>Harder</b><span>Source updates must be propagated to many threat documents.</span></div><div><b>Best for</b><span>Small, immutable or threat-specific source snapshots.</span></div></div></div></>}
-function Cache({cache}){return <><PageHead title="Working Set Monitor" sub="Lab 7.2 — WiredTiger cache behavior under random reads."/><div className="stats"><Stat label="Cache hit ratio" value={cache?`${cache.cacheHitRatio.toFixed(2)}%`:'—'} icon={Activity} note="pages requested vs read"/><Stat label="Cache used" value={cache?`${cache.cacheUsedPercent.toFixed(2)}%`:'—'} icon={Database} note="bytes currently in cache"/><Stat label="Pages read" value={cache?fmt(cache.pagesRead):'—'} icon={Server} note="since server start"/><Stat label="Pages requested" value={cache?fmt(cache.pagesRequested):'—'} icon={Zap} note="since server start"/></div><div className="panel"><div className="panel-head"><div><h2>WiredTiger snapshot</h2><p>Refresh this page to observe the changing cache state after random reads.</p></div><button className="classify" onClick={()=>location.reload()}><RefreshCw size={15}/> Refresh</button></div><div className="cachebars"><div><span>Cache utilization</span><b>{cache?cache.cacheUsedPercent.toFixed(2):0}%</b><div className="bar"><i style={{width:`${Math.min(100,cache?.cacheUsedPercent||0)}%`}}/></div></div><div><span>Cache hit ratio</span><b>{cache?cache.cacheHitRatio.toFixed(2):100}%</b><div className="bar"><i style={{width:`${Math.min(100,cache?.cacheHitRatio||100)}%`}}/></div></div></div></div><div className="callout"><Activity size={18}/><div><b>Run the real experiment</b><p>From backend run <code>npm run working-set:seed</code>, then <code>npm run cache:monitor</code>. The monitor performs a random read every 10 seconds.</p></div></div></>}
+function SchemaLab({bson}){return <><PageHead title="Schema Lab" sub="Lab 7.1 — embedding, referencing and BSON-size analysis."/><div className="grid-2"><div className="panel"><div className="panel-head"><div><h2>Production design</h2><p>Reference stable sources; embed threat-specific data.</p></div></div><div className="schema"><div className="schema-box primary"><b>Threat</b><span>title · severity · category</span><span>indicators[] — embedded</span><span>classification — embedded</span><span>sourceIds[] — references</span></div><div className="connector">references →</div><div className="schema-box"><b>Source</b><span>name</span><span>url</span><span>status</span><span>articleCount</span></div></div><div className="callout"><Database size={18}/><div><b>Why reference sources?</b><p>A source can publish many reports. Embedding the same publisher object in every threat duplicates data and makes publisher updates expensive.</p></div></div></div><div className="panel"><div className="panel-head"><div><h2>Lab 7.1 BSON check</h2><p>MongoDB document limit: 16 MB</p></div></div>{bson?<div className="bson"><div><span>Average</span><b>{Math.round(bson.averageBytes/1024*100)/100} KB</b></div><div><span>Minimum</span><b>{Math.round(bson.minBytes/1024*100)/100} KB</b></div><div><span>Maximum</span><b>{Math.round(bson.maxBytes/1024*100)/100} KB</b></div><div><span>Limit usage</span><b>{bson.percentOfLimit.toFixed(4)}%</b></div><div className="meter"><i style={{width:`${Math.min(100,bson.percentOfLimit)}%`}}/></div><Badge tone="green">No document approaches 16 MB</Badge></div>:<div className="empty">Loading BSON metrics…</div>}</div></div><div className="panel activity"><h2>Activity redesign: embed the source</h2><p>If you decide that the source itself is part of the actual threat record, embed a small source snapshot inside each threat.</p><pre>{`source: {\n  name: "Check Point Research",\n  url: "https://research.checkpoint.com/",\n  confidence: 92\n}`}</pre><div className="pros"><div><b>Faster</b><span>Threat + source is one read.</span></div><div><b>Harder</b><span>Source updates must be propagated to many threat documents.</span></div><div><b>Best for</b><span>Small, immutable or threat-specific source snapshots.</span></div></div></div></>}
+function Cache({cache}){const hitRatio = cache?.approximateCacheHitRatio ?? cache?.cacheHitRatio ?? 0; const pageReadCount = cache?.pagesReadDelta ?? cache?.pagesRead ?? 0; return <><PageHead title="Working Set Monitor" sub="Lab 7.2 — WiredTiger cache behavior under random reads."/><div className="stats"><Stat label="Approximate hit ratio" value={cache?`${hitRatio.toFixed(2)}%`:'—'} icon={Activity} note="delta between consecutive samples"/><Stat label="Cache used" value={cache?`${(cache.cacheUtilizationPercent ?? cache.cacheUsedPercent ?? 0).toFixed(2)}%`:'—'} icon={Database} note="bytes currently in cache"/><Stat label="Page reads" value={cache?fmt(pageReadCount):'—'} icon={Server} note="delta since last reading"/><Stat label="Pages requested" value={cache?fmt(cache.pagesRequestedDelta ?? cache.pagesRequested ?? 0):'—'} icon={Zap} note="delta since last reading"/></div><div className="panel"><div className="panel-head"><div><h2>WiredTiger snapshot</h2><p>Refresh this page to observe the changing cache state after random reads.</p></div><button className="classify" onClick={()=>location.reload()}><RefreshCw size={15}/> Refresh</button></div><div className="cachebars"><div><span>Cache utilization</span><b>{cache?`${(cache.cacheUtilizationPercent ?? cache.cacheUsedPercent ?? 0).toFixed(2)}%`:'0%'}</b><div className="bar"><i style={{width:`${Math.min(100,cache?.cacheUtilizationPercent ?? cache?.cacheUsedPercent ?? 0)}%`}}/></div></div><div><span>Approximate hit ratio</span><b>{cache?`${hitRatio.toFixed(2)}%`:'0%'}</b><div className="bar"><i style={{width:`${Math.min(100,hitRatio)}%`}}/></div></div></div></div><div className="callout"><Activity size={18}/><div><b>Run the real experiment</b><p>From backend run <code>npm run working-set:seed</code>, then <code>npm run cache:monitor</code>. The monitor performs a random read every 10 seconds and reports the delta-based approximate hit ratio.</p></div></div></>}
 function ThreatModal({item,close}){return <div className="overlay" onClick={close}><div className="modal" onClick={e=>e.stopPropagation()}><button className="close" onClick={close}><X/></button><Badge tone={item.severity}>{item.severity} severity</Badge><h2>{item.title}</h2><p>{item.summary}</p><div className="modal-grid"><div><small>SOURCE</small><b>{item.sourceName}</b></div><div><small>CATEGORY</small><b>{item.category}</b></div><div><small>CLASSIFICATION</small><b>{item.classification?.label || '—'} · {item.classification?.score || 0}/100</b></div><div><small>STATUS</small><b>{item.status}</b></div></div><h3>Indicators</h3><div className="chips">{item.indicators?.map((x,i)=><span key={i}>{x.type}: {x.value}</span>)}</div><h3>Techniques</h3><div className="chips">{item.techniques?.map(x=><span key={x}>{x}</span>)}</div></div></div>}
+
+function ClassifyModal({ form, result, onFieldChange, onClose, onSubmit }) {
+  return <div className="overlay" onClick={onClose}><div className="modal classify-modal" onClick={e=>e.stopPropagation()}><button className="close" onClick={onClose}><X/></button>
+    <h2>Classify Threat</h2>
+    <form onSubmit={onSubmit} className="classify-form">
+      <label>
+        <span>Threat title</span>
+        <input value={form.title} onChange={(e)=>onFieldChange('title', e.target.value)} placeholder="e.g. Fake invoice campaign targeting payroll" required />
+      </label>
+      <label>
+        <span>Description</span>
+        <textarea value={form.description} onChange={(e)=>onFieldChange('description', e.target.value)} placeholder="Add summary, artifacts, or attack details" rows="4" />
+      </label>
+      <label>
+        <span>Tags</span>
+        <input value={form.tags} onChange={(e)=>onFieldChange('tags', e.target.value)} placeholder="ransomware, phishing, exfiltration" />
+      </label>
+      <button type="submit" className="classify submit-btn"><Zap size={16}/> Classify</button>
+    </form>
+    {result && <div className="classification-result">
+      <Badge tone={result.severity === 'critical' ? 'red' : result.severity === 'high' ? 'yellow' : result.severity === 'medium' ? 'orange' : 'green'}>{result.label}</Badge>
+      <div className="score-row"><strong>{result.score}/100</strong> <span>{result.severity.toUpperCase()}</span></div>
+      <ul>{result.reasons.map((reason, index)=><li key={index}>{reason}</li>)}</ul>
+    </div>}
+  </div></div>;
+}
 
 createRoot(document.getElementById('root')).render(<App/>);

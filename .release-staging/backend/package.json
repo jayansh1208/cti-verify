@@ -1,0 +1,22 @@
+{
+  "name": "cti-verify-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "seed": "node scripts/seed.js",
+    "bson:check": "node scripts/bson-check.js",
+    "working-set:seed": "node scripts/working-set-seed.js",
+    "cache:monitor": "node scripts/cache-monitor.js",
+    "cti:watch": "node scripts/cti-watch.js"
+  },
+  "dependencies": {
+    "axios": "^1.8.4",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "mongoose": "^8.13.2"
+  }
+}

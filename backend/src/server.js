@@ -7,8 +7,32 @@ import { Threat, Source, Report } from './models.js';
 import { classifyThreat } from './classifier.js';
 
 const app = express();
+const lastCacheSample = { pagesRequested: 0, pagesRead: 0 };
+
 app.use(cors({ origin: process.env.CLIENT_URL?.split(',') || true }));
 app.use(express.json());
+
+app.get('/', (_req, res) => {
+  res.json({
+    ok: true,
+    service: 'CTI Verify API',
+    status: 'running',
+    database: mongoose.connection.name || null,
+    endpoints: ['/api/health', '/api/stats', '/api/threats', '/api/lab/cache']
+  });
+});
+
+function makeApproximateCacheHitRatio(currentRequested, currentRead) {
+  const requestedDelta = Math.max(0, Number(currentRequested) - (lastCacheSample.pagesRequested || Number(currentRequested)));
+  const readDelta = Math.max(0, Number(currentRead) - (lastCacheSample.pagesRead || Number(currentRead)));
+  lastCacheSample.pagesRequested = Number(currentRequested);
+  lastCacheSample.pagesRead = Number(currentRead);
+
+  if (requestedDelta <= 0) return { requestedDelta: 0, readDelta: 0, approximateCacheHitRatio: 0 };
+
+  const approximateCacheHitRatio = ((requestedDelta - readDelta) / requestedDelta) * 100;
+  return { requestedDelta, readDelta, approximateCacheHitRatio };
+}
 
 app.get('/api/health', async (_req, res) => {
   res.json({ ok: mongoose.connection.readyState === 1, database: mongoose.connection.name || null, time: new Date() });
@@ -98,13 +122,20 @@ app.get('/api/lab/cache', async (_req, res) => {
     const maxBytes = Number(cache['maximum bytes configured'] || 0);
     const pagesRead = Number(cache['pages read into cache'] || 0);
     const pagesRequested = Number(cache['pages requested from the cache'] || 0);
+    const { requestedDelta, readDelta, approximateCacheHitRatio } = makeApproximateCacheHitRatio(pagesRequested, pagesRead);
+    const cacheUtilizationPercent = maxBytes ? (bytesInCache / maxBytes) * 100 : 0;
     res.json({
       bytesInCache,
       maxBytes,
-      cacheUsedPercent: maxBytes ? (bytesInCache / maxBytes) * 100 : 0,
+      cacheUsedPercent: cacheUtilizationPercent,
+      cacheUtilizationPercent,
       pagesRead,
+      pagesReadDelta: readDelta,
       pagesRequested,
-      cacheHitRatio: pagesRequested ? ((pagesRequested - pagesRead) / pagesRequested) * 100 : 100,
+      pagesRequestedDelta: requestedDelta,
+      cacheHitRatio: approximateCacheHitRatio,
+      approximateCacheHitRatio,
+      approximateHitRatio: approximateCacheHitRatio,
       timestamp: new Date()
     });
   } catch (e) {

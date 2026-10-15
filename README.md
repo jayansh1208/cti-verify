@@ -72,13 +72,46 @@ Linux/macOS:
 cp .env.example .env
 ```
 
+Set the backend environment variables for your deployment:
+
+```env
+MONGODB_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/cti_verify
+CLIENT_URL=https://your-github-username.github.io
+CTI_SOURCE_URL=https://ctidigest.com/
+```
+
 Backend:
 
 ```text
 http://localhost:5000
 ```
 
-## 3. Start frontend
+## 3. Production deployment (GitHub Pages + hosted backend)
+
+This project is static on GitHub Pages, so the Express API must run from a server that is reachable from the internet. A common setup is:
+
+- Backend on Render or Railway with a MongoDB Atlas connection string
+- Frontend published to GitHub Pages
+- `VITE_API_URL` configured to the deployed backend URL, for example `https://cti-verify-api.onrender.com/api`
+- `CLIENT_URL` configured to your GitHub Pages origin, for example `https://your-github-user.github.io`
+
+```bash
+# frontend/.env
+VITE_API_URL=https://cti-verify-api.onrender.com/api
+
+# backend/.env
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/cti_verify
+CLIENT_URL=https://your-github-user.github.io
+```
+
+Rebuild the frontend after changing `VITE_API_URL`:
+
+```bash
+cd frontend
+npm run build
+```
+
+## 4. Start frontend
 
 Open another terminal:
 
@@ -94,7 +127,7 @@ Frontend:
 http://localhost:5173
 ```
 
-## 4. Lab 7.1 commands
+## 5. Lab 7.1 commands
 
 ### Seed realistic CTI data
 
@@ -111,7 +144,7 @@ npm run bson:check
 
 The script uses MongoDB's `$bsonSize` and reports average, minimum and maximum document size against the 16 MB limit.
 
-## 5. Lab 7.2 commands
+## 6. Lab 7.2 commands
 
 ### Insert 100,000 approximately 2 KB documents
 
@@ -125,7 +158,7 @@ npm run working-set:seed
 npm run cache:monitor
 ```
 
-The monitor samples every 10 seconds and reports cache usage, pages requested/read, and the derived cache-hit ratio.
+The monitor samples every 10 seconds, logs cache utilization and page-read deltas separately, and prints an approximate cache-hit ratio based on the difference between consecutive WiredTiger counters. This prevents the cumulative totals from misleading the experiment.
 
 ### Test one random read from the API
 
@@ -133,13 +166,13 @@ The monitor samples every 10 seconds and reports cache usage, pages requested/re
 GET http://localhost:5000/api/lab/working-set/random-read
 ```
 
-## 6. New threat report watcher
+## 7. New threat report watcher
 
 ```bash
 npm run cti:watch
 ```
 
-The watcher reads the configured `CTI_SOURCE_URL`, discovers article/report links, compares them with stored report URLs, and inserts unseen reports. The source URL can be changed in `.env`.
+By default, the watcher runs once and exits. Set `WATCH_INTERVAL_MS` to a value such as `600000` to run on a polling schedule instead. It reads the configured `CTI_SOURCE_URL`, filters out navigation and unrelated links, extracts actual publication dates when available, deduplicates report URLs, and creates new `Report` records only if they are not already stored. It is a best-effort scraper for a feed-like source rather than a fully reliable threat-report ingestion pipeline.
 
 Use external sources responsibly and follow their terms and robots rules.
 
@@ -240,3 +273,5 @@ Indexes make common filters/searches faster by avoiding a full collection scan f
 - [ ] Take screenshots of the dashboard, schema lab and working-set metrics
 - [ ] Remove `.env` and `node_modules` before submission
 - [ ] ZIP `frontend/`, `backend/`, `docker-compose.yml`, `README.md`, and documentation
+- [ ] Ensure the final ZIP excludes `.git/`, `node_modules/`, local `.env` files, and build caches while preserving `package-lock.json` and `.env.example` files
+- [ ] Include an evidence file or manifest inside the ZIP showing which files were kept and why

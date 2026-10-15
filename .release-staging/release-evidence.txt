@@ -1,0 +1,23 @@
+CTI Verify final ZIP evidence
+============================
+
+Included files:
+- backend/
+- frontend/
+- docs/
+- README.md
+- VIVA.md
+- docker-compose.yml
+- .github/
+
+Excluded from the final ZIP:
+- .git/
+- node_modules/
+- .env and .env.local files
+- build caches and dist folders
+
+Preserved intentionally:
+- package-lock.json files
+- .env.example files
+
+Generated on: 2026-10-13T19:14:37.9571655Z
