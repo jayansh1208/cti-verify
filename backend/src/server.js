@@ -2,11 +2,12 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
+import { pathToFileURL } from 'node:url';
 import { connectDB, db } from './db.js';
 import { Threat, Source, Report } from './models.js';
 import { classifyThreat } from './classifier.js';
 
-const app = express();
+export const app = express();
 const lastCacheSample = { pagesRequested: 0, pagesRead: 0 };
 
 app.use(cors({ origin: process.env.CLIENT_URL?.split(',') || true }));
@@ -165,5 +166,22 @@ app.get('/api/lab/working-set/random-read', async (_req, res) => {
   res.json({ seq: n, found: !!doc });
 });
 
-const PORT = Number(process.env.PORT || 5000);
-connectDB().then(() => app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`))).catch(err => { console.error(err); process.exit(1); });
+export function startServer() {
+  const PORT = Number(process.env.PORT || 5000);
+  return connectDB()
+    .then(() => {
+      const server = app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
+      return server;
+    })
+    .catch(err => {
+      console.error(err);
+      process.exit(1);
+    });
+}
+
+const isDirectExecution = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectExecution) {
+  startServer();
+}
+
+export default app;

@@ -30,10 +30,10 @@ Then update `.env` with your deployed backend URL:
 VITE_API_URL=http://localhost:5000/api
 ```
 
-For production or hosted deployment:
+For production or Vercel deployment:
 
 ```env
-VITE_API_URL=https://your-render-or-railway-app.example.com/api
+VITE_API_URL=https://your-backend-project.vercel.app/api
 ```
 
 ## 4) Start the frontend

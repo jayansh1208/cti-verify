@@ -44,7 +44,7 @@ const reportSchema = new mongoose.Schema({
   url: { type: String, unique: true, sparse: true },
   publishedAt: Date,
   summary: String,
-  isNew: { type: Boolean, default: true }
+  isFresh: { type: Boolean, default: true }
 }, { timestamps: true });
 
 export const Threat = mongoose.model('Threat', threatSchema);

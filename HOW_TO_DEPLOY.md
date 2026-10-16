@@ -1,82 +1,96 @@
-# How to Deploy on GitHub Pages + Hosted Backend
+# How to Deploy on Vercel
 
-## 1) Deploy the backend
+Yes — you can host the full app on Vercel.
 
-Use a hosted service such as Render or Railway.
+## 1) Deploy the backend on Vercel
+
+Use a Vercel project for the API, or use a serverless API route in the same repo.
 
 ### Required backend environment variables
 
 ```env
-PORT=5000
+PORT=10000
 MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/cti_verify
-CLIENT_URL=https://your-github-user.github.io
+CLIENT_URL=https://your-frontend-project.vercel.app
 CTI_SOURCE_URL=https://ctidigest.com/
 ```
 
+> If you want to avoid Render's credit-card prompt, deploy the backend as a Vercel serverless API instead of a Render service.
+
 ### Backend deployment notes
 
-- Keep the backend on a real server that is reachable over the internet.
+- Keep the backend on a public Vercel URL.
 - Do not put your MongoDB Atlas connection string in frontend code.
-- Make sure CORS allows your GitHub Pages origin in `CLIENT_URL`.
-- Start the app with the backend start command, for example:
+- Make sure CORS allows your frontend domain in `CLIENT_URL`.
 
-```bash
-npm start
-```
-
-## 2) Deploy the frontend to GitHub Pages
-
-The frontend is static. GitHub Pages can host the built files.
+## 2) Deploy the frontend on Vercel
 
 ### Set the frontend API URL
 
-Create or update the frontend environment before building:
+Before deploying the frontend, configure:
 
 ```env
-VITE_API_URL=https://your-render-or-railway-app.example.com/api
+VITE_API_URL=https://your-backend-project.vercel.app/api
 ```
 
-Then rebuild:
+### Vercel project setup
 
-```bash
-cd frontend
-npm install
-npm run build
-```
-
-### GitHub Actions deploy setup
-
-The repo contains a deploy workflow in:
+1. Import the repo into Vercel.
+2. Set the root directory to:
 
 ```text
-.github/workflows/deploy.yml
+frontend
 ```
 
-It builds the frontend and publishes the `frontend/dist` folder to the GitHub Pages branch.
+3. Add the environment variable:
+
+```env
+VITE_API_URL=https://your-backend-project.vercel.app/api
+```
+
+4. Deploy.
 
 ## 3) Final production configuration
 
-Set these values for the live app:
+Use these live values:
 
 ```env
 # Backend
 MONGODB_URI=mongodb+srv://...
-CLIENT_URL=https://your-github-user.github.io
+CLIENT_URL=https://your-frontend-project.vercel.app
 CTI_SOURCE_URL=https://ctidigest.com/
 
 # Frontend
-VITE_API_URL=https://your-render-or-railway-app.example.com/api
+VITE_API_URL=https://your-backend-project.vercel.app/api
 ```
 
 ## 4) Verify the deployment
 
-- Open the GitHub Pages site
-- Confirm the dashboard loads
-- Confirm the frontend can reach the backend API
-- Confirm MongoDB is connected from the backend
-- Confirm the app works without exposing secrets in the browser
+- Open the Vercel frontend site.
+- Confirm the dashboard loads.
+- Confirm the frontend can reach the backend API.
+- Confirm MongoDB is connected from the backend.
+- Confirm the app works without exposing secrets in the browser.
 
 ## 5) Clean final packaging
+
+Before final submission, remove local build artifacts and environment files from the ZIP, while keeping:
+
+- `package-lock.json`
+- `.env.example`
+
+Do not include:
+
+- `.git/`
+- `node_modules/`
+- local `.env` files
+- build caches
+
+The repo includes a PowerShell packaging helper to do this:
+
+```bash
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\prepare-final-zip.ps1
+```
 
 Before final submission, remove local build artifacts and environment files from the ZIP, while keeping:
 

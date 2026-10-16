@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "test": "node --test",
     "seed": "node scripts/seed.js",
     "bson:check": "node scripts/bson-check.js",
     "working-set:seed": "node scripts/working-set-seed.js",
